@@ -2,32 +2,44 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import fs from "fs";
+import path from "path";
+import crypto from "crypto";
+import { fileURLToPath } from "url";
 import { STLLoader } from "three-stdlib";
 import * as THREE from "three";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 app.use(cors());
-const upload = multer({ dest: "uploads/" });
+
+// ✅ UPLOAD DIRECTORY
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+const upload = multer({ dest: uploadDir });
 
 // ✅ MATERIAL + PRICING CONSTANTS
 const PLA_DENSITY = 1.24;     // g/cm³
-const INFILL_FACTOR = 0.42;  // ✅ 10% infill (MATCHES YOUR SLICER)
+const INFILL_FACTOR = 0.42;  // 10% infill
 const PRICE_PER_GRAM = 0.63; // $/g
 const MIN_PRICE = 2;        // $
-const MAX_GRAMS = 200;       // g (after infill)
+const MAX_GRAMS = 200;      // g (after infill)
 
 app.get("/", (req, res) => {
-  res.send("Dimensional Prints STL pricing API is running ✅");
+  res.send("Dimensional Prints STL pricing + storage API is running ✅");
 });
 
+// ✅ PRICE + SAVE STL
 app.post("/price", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded." });
     }
 
-    const filePath = req.file.path;
-    const buffer = fs.readFileSync(filePath);
+    const tempPath = req.file.path;
+    const buffer = fs.readFileSync(tempPath);
 
     // ✅ Convert Node Buffer → ArrayBuffer
     const arrayBuffer = buffer.buffer.slice(
@@ -39,6 +51,7 @@ app.post("/price", upload.single("file"), async (req, res) => {
     const geometry = loader.parse(arrayBuffer);
 
     if (!geometry?.attributes?.position) {
+      fs.unlinkSync(tempPath);
       throw new Error("Invalid STL geometry.");
     }
 
@@ -61,18 +74,26 @@ app.post("/price", upload.single("file"), async (req, res) => {
     const grams = cm3 * PLA_DENSITY * INFILL_FACTOR;
 
     if (grams > MAX_GRAMS) {
-      fs.unlinkSync(filePath);
+      fs.unlinkSync(tempPath);
       return res.status(400).json({ error: "Model exceeds 200g auto limit." });
     }
 
     let price = grams * PRICE_PER_GRAM;
     if (price < MIN_PRICE) price = MIN_PRICE;
 
-    fs.unlinkSync(filePath);
+    // ✅ PERMANENT FILE SAVE
+    const id = crypto.randomBytes(12).toString("hex");
+    const finalName = `${id}.stl`;
+    const finalPath = path.join(uploadDir, finalName);
+    fs.renameSync(tempPath, finalPath);
+
+    // ✅ PUBLIC DOWNLOAD LINK
+    const fileUrl = `https://${process.env.RENDER_EXTERNAL_HOSTNAME || "stl-pricing-server.onrender.com"}/uploads/${finalName}`;
 
     res.json({
       grams: grams.toFixed(2),
-      price: price.toFixed(2)
+      price: price.toFixed(2),
+      fileUrl
     });
 
   } catch (err) {
@@ -81,7 +102,10 @@ app.post("/price", upload.single("file"), async (req, res) => {
   }
 });
 
+// ✅ PUBLIC FILE ACCESS
+app.use("/uploads", express.static(uploadDir));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`STL pricing server running on port ${PORT}`);
+  console.log(`STL pricing + storage server running on port ${PORT} ✅`);
 });
