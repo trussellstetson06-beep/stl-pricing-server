@@ -14,6 +14,10 @@ const PRICE_PER_GRAM = 0.30;
 const MIN_PRICE = 10;
 const MAX_GRAMS = 200;
 
+app.get("/", (req, res) => {
+  res.send("Dimensional Prints STL pricing API is running ✅");
+});
+
 app.post("/price", upload.single("file"), async (req, res) => {
   try {
     const filePath = req.file.path;
