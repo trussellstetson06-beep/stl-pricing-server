@@ -20,14 +20,25 @@ app.get("/", (req, res) => {
 
 app.post("/price", upload.single("file"), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded." });
+    }
+
     const filePath = req.file.path;
     const buffer = fs.readFileSync(filePath);
 
-    const loader = new STLLoader();
-    const geometry = loader.parse(buffer);
+    // ✅ FIX: Convert Node Buffer → ArrayBuffer
+    const arrayBuffer = buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength
+    );
 
-    geometry.computeBoundingBox();
-    geometry.computeVertexNormals();
+    const loader = new STLLoader();
+    const geometry = loader.parse(arrayBuffer);
+
+    if (!geometry?.attributes?.position) {
+      throw new Error("Invalid STL geometry.");
+    }
 
     let volume = 0;
     const position = geometry.attributes.position.array;
@@ -45,6 +56,7 @@ app.post("/price", upload.single("file"), async (req, res) => {
     const grams = cm3 * PLA_DENSITY;
 
     if (grams > MAX_GRAMS) {
+      fs.unlinkSync(filePath);
       return res.status(400).json({ error: "Model exceeds 200g auto limit." });
     }
 
@@ -59,11 +71,12 @@ app.post("/price", upload.single("file"), async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to process STL." });
+    console.error("STL Error:", err);
+    return res.status(500).json({ error: "Failed to process STL." });
   }
 });
 
-app.listen(3000, () => {
-  console.log("STL pricing server running on port 3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`STL pricing server running on port ${PORT}`);
 });
