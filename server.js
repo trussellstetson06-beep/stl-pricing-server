@@ -9,10 +9,12 @@ const app = express();
 app.use(cors());
 const upload = multer({ dest: "uploads/" });
 
-const PLA_DENSITY = 1.24; // g/cm3
-const PRICE_PER_GRAM = 0.30;
-const MIN_PRICE = 10;
-const MAX_GRAMS = 200;
+// ✅ MATERIAL + PRICING CONSTANTS
+const PLA_DENSITY = 1.24;     // g/cm³
+const INFILL_FACTOR = 0.10;  // ✅ 10% infill (MATCHES YOUR SLICER)
+const PRICE_PER_GRAM = 0.30; // $/g
+const MIN_PRICE = 10;        // $
+const MAX_GRAMS = 200;       // g (after infill)
 
 app.get("/", (req, res) => {
   res.send("Dimensional Prints STL pricing API is running ✅");
@@ -27,7 +29,7 @@ app.post("/price", upload.single("file"), async (req, res) => {
     const filePath = req.file.path;
     const buffer = fs.readFileSync(filePath);
 
-    // ✅ FIX: Convert Node Buffer → ArrayBuffer
+    // ✅ Convert Node Buffer → ArrayBuffer
     const arrayBuffer = buffer.buffer.slice(
       buffer.byteOffset,
       buffer.byteOffset + buffer.byteLength
@@ -52,8 +54,11 @@ app.post("/price", upload.single("file"), async (req, res) => {
 
     volume = Math.abs(volume); // mm³
 
+    // ✅ SOLID VOLUME → CM³
     const cm3 = volume / 1000;
-    const grams = cm3 * PLA_DENSITY;
+
+    // ✅ APPLY 10% INFILL
+    const grams = cm3 * PLA_DENSITY * INFILL_FACTOR;
 
     if (grams > MAX_GRAMS) {
       fs.unlinkSync(filePath);
