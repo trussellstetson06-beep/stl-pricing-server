@@ -12,7 +12,7 @@ const upload = multer({ dest: "uploads/" });
 // ✅ MATERIAL + PRICING CONSTANTS
 const PLA_DENSITY = 1.24;     // g/cm³
 const INFILL_FACTOR = 0.42;  // ✅ 10% infill (MATCHES YOUR SLICER)
-const PRICE_PER_GRAM = 0.30; // $/g
+const PRICE_PER_GRAM = 0.6315; // $/g
 const MIN_PRICE = 2;        // $
 const MAX_GRAMS = 200;       // g (after infill)
 
